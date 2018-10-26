@@ -1,4 +1,4 @@
-from douban.home import Crawl
+from douban.crawl.home import Crawl
 
 if __name__ == '__main__':
     crawl = Crawl()

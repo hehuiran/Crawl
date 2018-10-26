@@ -1,164 +1,20 @@
 # -*-coding:utf-8-*-标识
-import json
 import re
-from abc import ABCMeta, abstractmethod
 
 import bs4
 import requests
-import sqlalchemy
-import sqlalchemy.orm
 from bs4 import BeautifulSoup
-from sqlalchemy import Column, ForeignKey, INT, VARCHAR, create_engine, and_
+from sqlalchemy import Column, ForeignKey, INT, VARCHAR, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship, foreign, remote
-from douban.book import CrawlBook
+from sqlalchemy.orm import sessionmaker, relationship
 
-
-class Parser(object):
-    # 解析抽象类
-    __metaclass__ = ABCMeta
-
-    def get_items(self, ul: bs4.Tag):
-        return ul.find_all('li')
-
-    # 抽象方法
-    @abstractmethod
-    def get_data(self, item):
-        pass
-
-
-# 豆瓣热点内容模块解析
-class HotParser(Parser):
-
-    def get_data(self, item):
-        image = item.find('img')
-        img = image.get('data-origin')
-        a = item.find_all('a')
-        url = a[1].get('href')
-        title = a[1].string
-        des = item.find('span', 'num').string
-        return [img, url, title, des]
-
-
-# 豆瓣时间模块解析
-class TimeParser(Parser):
-
-    def get_data(self, item):
-        img = item.find('img').get('src')
-        a_title = item.find('a', 'title')
-        url = a_title.get('href')
-        title = a_title.string
-        des = item.find('span', 'type').string
-        return [img, url, title, des]
-
-
-# 豆瓣视频模块解析
-class VideoParser(Parser):
-
-    def get_items(self, ul):
-        data_id = ul.get('data-id')
-        url = 'https://m.douban.com/rexxar/api/v2/muzzy/columns/' + data_id + '/items?start=0&count=3'
-        text = requests.get(url).text
-        json_text = json.loads(text)
-        return json_text['items']
-
-    def get_data(self, item):
-        img = item['cover']
-        url = item['uri']
-        title = item['title']
-        return [img, url, title]
-
-
-# 豆瓣电影模块解析
-class MovieParser(Parser):
-
-    def get_data(self, item):
-        image = item.find('img')
-        img = image.get('data-origin')
-        url = item.find('a').get('href')
-        title = image.get('alt')
-        des = item.find('i').string
-        return [img, url, title, des]
-
-
-# 豆瓣小组模块解析
-class GroupParser(Parser):
-    def get_data(self, item):
-        image = item.find('img')
-        img = image.get('data-origin')
-        div_info = item.find('div', 'info')
-        a_title = div_info.find('a')
-        url = a_title.get('href')
-        title = a_title.string
-        texts = div_info.get_text("|", strip=True)
-        des = str(texts).split("|")[1]
-        return [img, url, title, des]
-
-
-# 豆瓣读书模块解析
-class BookParser(Parser):
-
-    def get_data(self, item):
-        image = item.find('img')
-        img = image.get('data-origin')
-        url = item.find('a').get('href')
-        title = image.get('alt')
-        div_price = item.find('div', 'price')
-        des = '' if div_price is None else re.sub('[\n\xa0 ·]', '', div_price.string)
-        name = item.find('div', 'author').string
-        return [img, url, title, des, name]
-
-
-# 豆瓣音乐模块解析
-class MusicParser(Parser):
-
-    def get_data(self, item):
-        image = item.find('img')
-        img = image.get('data-origin')
-        new_music = img is not None
-        url = item.find('a').get('href')
-        title = image.get('alt') if new_music else item.find('div', 'title').string
-        des = name = ''
-        if new_music:
-            name = item.find('div', 'artist').get_text(strip=True)
-            des = item.find('i').string
-        else:
-            img = image.get('src')
-        return [img, url, title, des, name]
-
-
-# 豆瓣豆品模块解析
-class MarketParser(Parser):
-
-    def get_data(self, item):
-        div_pic = item.find('div', 'market-spu-pic')
-        style = div_pic.get('style')
-        p = re.compile(r'[(](.*?)[)]', re.S)
-        img = re.findall(p, style)[0]
-        a_title = item.find('a', 'market-spu-title')
-        url = a_title.get('href')
-        title = re.sub('[\n\xa0 ·]', '', a_title.string)
-        des = re.sub('[\n\xa0 ·]', '', item.find('span', 'market-spu-price').string)
-        return [img, url, title, des]
-
-
-# 豆瓣同城模块解析
-class EventsParser(Parser):
-
-    def get_data(self, item):
-        image = item.find('img')
-        img = image.get('data-origin')
-        div_title = item.find('div', 'title')
-        a_title = div_title.find('a')
-        url = a_title.get('href')
-        title = a_title.get('title')
-        des = re.sub('[\n\xa0 ·]', '', item.find('div', 'follow').string)
-        name = item.find('address').get('title')
-        time = re.sub('[\n\xa0 ·]', '', item.find('div', 'datetime').string)
-        return [img, url, title, des, name, time]
-
-
+from douban.crawl.book import CrawlBook
+from douban.impl.home_parse import HotHomeParser, TimeHomeParser, VideoHomeParser, MovieHomeParser, GroupHomeParser, \
+    BookHomeParser, MusicHomeParser, MarketHomeParser, EventsHomeParser
+from douban.interface.parse import HomeParser
 # 创建对象的基类:
+from douban.utils import CollectionUtils
+
 Base = declarative_base()
 
 # 初始化数据库连接:
@@ -273,11 +129,6 @@ class Crawl(object):
         div_albums = main_bs.find('div', 'albums')
         return div_albums.find_all('ul')
 
-    @staticmethod
-    def _get_value(array: list, index: int):
-        size = len(array)
-        return str(array[index]) if index < size else ''
-
     def handler_html(self):
         # 创建表
         # Base.metadata.create_all(engine)
@@ -285,10 +136,14 @@ class Crawl(object):
         html = requests.get(self.__target).text  # type:str
         self.__bs = BeautifulSoup(html, 'html.parser')
         self._crawl_tabs()
+
+        tab = self.__tabs[0]  # type:Tab
+        CrawlBook(tab.url)
+
         tag_ids = ['sns', 'time', 'video', 'movie', 'group', 'book', 'music', 'market', 'events']
-        parsers = [HotParser(), TimeParser(), VideoParser(), MovieParser(), GroupParser(),
-                   BookParser(), MusicParser(),
-                   MarketParser(), EventsParser()]
+        parsers = [HotHomeParser(), TimeHomeParser(), VideoHomeParser(), MovieHomeParser(), GroupHomeParser(),
+                   BookHomeParser(), MusicHomeParser(),
+                   MarketHomeParser(), EventsHomeParser()]
         for i in range(len(tag_ids)):
             self._crawl_data(tag_ids[i], i != 0, parsers[i])
 
@@ -343,7 +198,7 @@ class Crawl(object):
             f.writelines(text)
 
     # 保存详细数据
-    def _crawl_data(self, tag_id: str, has_section_title: bool, parser: Parser):
+    def _crawl_data(self, tag_id: str, has_section_title: bool, parser: HomeParser):
         div_main, home = self._crawl_title(tag_id, has_section_title)
         uls = div_main.find_all('ul') if has_section_title else Crawl._get_albums_uls(div_main)
         for i in range(len(uls)):
@@ -354,10 +209,12 @@ class Crawl(object):
             for j in range(len(items)):
                 item = items[j]
                 array = parser.get_data(item)  # type:list
-                home_sub_data = HomeSubData(img=Crawl._get_value(array, 0), url=Crawl._get_value(array, 1),
-                                            title=Crawl._get_value(array, 2),
-                                            des=Crawl._get_value(array, 3), name=Crawl._get_value(array, 4),
-                                            time=Crawl._get_value(array, 5))
+                home_sub_data = HomeSubData(img=CollectionUtils.get_list_value(array, 0),
+                                            url=CollectionUtils.get_list_value(array, 1),
+                                            title=CollectionUtils.get_list_value(array, 2),
+                                            des=CollectionUtils.get_list_value(array, 3),
+                                            name=CollectionUtils.get_list_value(array, 4),
+                                            time=CollectionUtils.get_list_value(array, 5))
                 home_sub.home_sub_data_array.append(home_sub_data)
         self.__all_data.append(home)
 
@@ -391,4 +248,3 @@ class Crawl(object):
         for value in a:
             tab = Tab(name=str(value.string), url=str(value.get('href')))
             self.__tabs.append(tab)
-        CrawlBook(str(a[0].get('href')))
