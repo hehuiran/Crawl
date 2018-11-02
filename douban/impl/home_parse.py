@@ -58,7 +58,8 @@ class MovieHomeParser(HomeParser):
         img = img_tag.get('data-origin')
         url = item.find('a').get('href')
         title = img_tag.get('alt')
-        des = item.find('i').string
+        i_tag = item.find('i')
+        des = '' if i_tag is None else i_tag.string
         return [img, url, title, des]
 
 

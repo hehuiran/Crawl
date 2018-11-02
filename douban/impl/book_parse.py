@@ -31,6 +31,8 @@ class InformationBookParser(BookParser):
         # [img, book_id, title, author, score, information_title, source, information_des]
         array = InformationBookParser.parse_note(bs) if url.find('note') >= 0 else InformationBookParser.parse_review(
             bs)
+        if array is None:
+            return None
         array.append(information_title)
         array.append(source)
         array.append(information_des)
@@ -40,6 +42,8 @@ class InformationBookParser(BookParser):
     def parse_note(bs: BeautifulSoup):
         div_note = bs.find('div', 'note', id='link-report')
         div_wrapper = div_note.find('div', 'subject-wrapper')
+        if div_wrapper is None:
+            return None
         img = div_wrapper.find('img').get('src')
         book_id = re.sub('\D', '', div_wrapper.find('a').get('href'))
         title = div_wrapper.find('span', 'title-text').string
@@ -59,3 +63,21 @@ class InformationBookParser(BookParser):
         title = img_tag.get('title')
         author = div_wrapper.find('span', 'info-item-val').string
         return [img, book_id, title, author, '']
+
+
+class AttentionBookParser(BookParser):
+
+    def get_data(self, item):
+        img_tag = item.find('img')
+        img = img_tag.get('src')
+        book_id = re.sub('\D', '', item.find('a').get('href'))
+        title = img_tag.get('alt')
+        author = StringUtils.filter_space_and_enter(item.find('p', 'author').string)
+        score = StringUtils.filter_space_and_enter(item.find('span', 'average-rating').string)
+        source = StringUtils.filter_space_and_enter(item.find('p', 'book-list-classification').string)
+        p_review_tag = item.find('p', 'reviews')
+        information_title = p_review_tag.find('a').string
+        texts = p_review_tag.get_text("|", strip=True)
+        information_des = StringUtils.filter_space_and_enter(str(texts).split("|")[0])
+        return [img, book_id, title, author, score, information_title, source,
+                re.sub('\(', '', information_des)]

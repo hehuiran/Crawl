@@ -4,113 +4,13 @@ import re
 import bs4
 import requests
 from bs4 import BeautifulSoup
-from sqlalchemy import Column, ForeignKey, INT, VARCHAR, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
 
 from douban.crawl.book import CrawlBook
 from douban.impl.home_parse import HotHomeParser, TimeHomeParser, VideoHomeParser, MovieHomeParser, GroupHomeParser, \
     BookHomeParser, MusicHomeParser, MarketHomeParser, EventsHomeParser
 from douban.interface.parse import HomeParser
-# 创建对象的基类:
+from douban.sql import Tab, Home, HomeSubData, HomeSub, SqlFactory, sql_Factory, BookCategory
 from douban.utils import CollectionUtils
-
-Base = declarative_base()
-
-# 初始化数据库连接:
-engine = create_engine('mysql+mysqlconnector://root:yzkj1234@localhost:3306/sqltest?charset=utf8', echo=True,
-                       encoding='utf-8', convert_unicode=True)
-# 创建DBSession类型:
-DBSession = sessionmaker(bind=engine)
-
-
-class Tab(Base):
-    # 表名
-    __tablename__ = 'tab'
-
-    id = Column(INT(), primary_key=True)
-    name = Column(VARCHAR(255))
-    url = Column(VARCHAR(255))
-
-    def __init__(self, name, url):
-        self.name = name
-        self.url = url
-
-
-class HomeSubData(Base):
-    # 表名
-    __tablename__ = 'home_sub_data'
-
-    id = Column(INT(), primary_key=True)
-    img = Column(VARCHAR(255))
-    url = Column(VARCHAR(255))
-    title = Column(VARCHAR(255))
-    des = Column(VARCHAR(255))
-    name = Column(VARCHAR(255))
-    time = Column(VARCHAR(255))
-    """通过外键约束建立关系,耦合性大,数据删除需删除从表后才能删除主表
-
-            home_sub_id = Column(INT(), ForeignKey('home_sub.id'))"""
-    home_sub_id = Column(INT(), ForeignKey('home_sub.id', ondelete='CASCADE'))
-
-    # 不通过外键约束建立一对多关系
-    # home_sub_id = Column(INT())
-
-    def __init__(self, img, url, title, des, name, time):
-        self.img = img
-        self.url = url
-        self.title = title
-        self.des = des
-        self.name = name
-        self.time = time
-
-
-class HomeSub(Base):
-    # 表名
-    __tablename__ = 'home_sub'
-
-    id = Column(INT(), primary_key=True)
-    title = Column(VARCHAR(255))
-    type = Column(VARCHAR(255))
-    """通过外键约束建立关系,耦合性大,数据删除需删除从表后才能删除主表
-
-            home_sub_data_array = relationship('HomeSubData', backref='home_sub')
-            
-            home_id = Column(INT(), ForeignKey('home.id'))"""
-    home_sub_data_array = relationship('HomeSubData', backref='home_sub', cascade='all, delete-orphan',
-                                       passive_deletes=True)
-    home_id = Column(INT(), ForeignKey('home.id', ondelete='CASCADE'))
-
-    # 不通过外键约束建立一对多关系
-    # home_sub_data_array = relationship('HomeSubData', primaryjoin=foreign(HomeSubData.home_sub_id) == remote(id),
-    #                                    backref='home_sub')
-    # home_id = Column(INT())
-
-    def __init__(self, title, tp):
-        self.title = title
-        self.type = tp
-        self.home_sub_data_array = []
-
-
-class Home(Base):
-    # 表名
-    __tablename__ = 'home'
-
-    id = Column(INT(), primary_key=True)
-    title = Column(VARCHAR(255))
-    type = Column(VARCHAR(255))
-    """通过外键约束建立关系,耦合性大,数据删除需删除从表后才能删除主表
-    
-            home_sub_array = relationship('HomeSub', backref='home')"""
-    home_sub_array = relationship('HomeSub', backref='home', cascade='all, delete-orphan', passive_deletes=True)
-
-    # 不通过外键约束建立一对多关系
-    # home_sub_array = relationship('HomeSub', primaryjoin=foreign(HomeSub.home_id) == remote(id), backref='home')
-
-    def __init__(self, title, tp):
-        self.title = title
-        self.type = tp
-        self.home_sub_array = []
 
 
 # noinspection PyTypeChecker
@@ -130,9 +30,21 @@ class Crawl(object):
         return div_albums.find_all('ul')
 
     def handler_html(self):
-        # 创建表
-        # Base.metadata.create_all(engine)
-        session = DBSession()
+        session = sql_Factory.get_session()
+        print('session是')
+        print(session)
+
+        # 清空表中的数据
+        tabs = session.query(Tab).all()
+        for tab in tabs:
+            session.delete(tab)
+        homes = session.query(Home).all()
+        for home in homes:
+            session.delete(home)
+        books = session.query(BookCategory).all()
+        for book in books:
+            session.delete(book)
+
         html = requests.get(self.__target).text  # type:str
         self.__bs = BeautifulSoup(html, 'html.parser')
         self._crawl_tabs()
@@ -147,14 +59,6 @@ class Crawl(object):
         for i in range(len(tag_ids)):
             self._crawl_data(tag_ids[i], i != 0, parsers[i])
 
-        # 清空表中的数据
-        tabs = session.query(Tab).all()
-        for tab in tabs:
-            session.delete(tab)
-        homes = session.query(Home).all()
-        for home in homes:
-            session.delete(home)
-
         # 添加到session
         # 添加tab
         session.add_all(self.__tabs)
@@ -165,7 +69,6 @@ class Crawl(object):
 
         # homes = session.query(Home).all()
         # Crawl._write_data(homes)
-
         # 关闭session
         session.close()
 
