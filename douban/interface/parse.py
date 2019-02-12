@@ -19,7 +19,7 @@ class HomeParser(Parser, ABC):
 
 
 class BookParser(Parser, ABC):
-    def get_items(self, uls: list):
+    def get_items(self, uls):
         items = []
         for ul in uls:
             lis = ul.find_all('li')

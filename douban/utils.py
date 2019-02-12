@@ -21,3 +21,7 @@ class StringUtils(object):
     @staticmethod
     def filter_space_and_enter(value: str):
         return re.sub('[\n\xa0 ·]', '', value)
+
+    @staticmethod
+    def is_empty(value: str):
+        return value is None or value.strip() == ""

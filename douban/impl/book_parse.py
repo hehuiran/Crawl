@@ -81,3 +81,27 @@ class AttentionBookParser(BookParser):
         information_des = StringUtils.filter_space_and_enter(str(texts).split("|")[0])
         return [img, book_id, title, author, score, information_title, source,
                 re.sub('\(', '', information_des)]
+
+
+class Top250BookParser(BookParser):
+
+    def get_items(self, uls):
+        html = requests.get(url=uls).text
+        soup = BeautifulSoup(html, 'html.parser')
+        div_article = soup.find('div', id='content').find('div', 'article')
+        return div_article.find_all('table')
+
+    def get_data(self, item):
+        img = item.find('img').get('src')
+        div_tag = item.find('div', 'pl2')
+        a_tag = div_tag.find('a')
+        book_id = re.sub('\D', '', a_tag.get('href'))
+        title = a_tag.get('title')
+        author = item.find('p', 'pl').string
+        score = item.find('span', 'rating_nums').string
+        source = StringUtils.filter_space_and_enter(item.find('span', 'pl').string)
+        span_tag = div_tag.find('span')
+        information_title = '' if span_tag is None else span_tag.string
+        des_tag = item.find('span', 'inq')
+        information_des = '' if des_tag is None else des_tag.string
+        return [img, book_id, title, author, score, information_title, source, information_des]

@@ -31,8 +31,6 @@ class Crawl(object):
 
     def handler_html(self):
         session = sql_Factory.get_session()
-        print('session是')
-        print(session)
 
         # 清空表中的数据
         tabs = session.query(Tab).all()

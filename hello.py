@@ -1,13 +1,9 @@
 # -*-coding:utf-8-*-标识
-import multiprocessing
-import sys
-import time
 import os
+import sys
 
 import requests
 from bs4 import BeautifulSoup
-
-from image import ImageLoader
 
 
 class Downloader(object):
@@ -53,16 +49,15 @@ class Downloader(object):
 if __name__ == '__main__':
 
     """ 批量为目录文件添加前缀 """
-    path = "C:/Users/Administrator/Desktop/V1.3切图/用户等级汇总_slices/Android/3x"
-    # old_names = os.listdir(path)
-    # mark = 'ic_shape_'
-    # for old_name in old_names:
-    #     if old_name != sys.argv[0]:
-    #         print(type(old_name))
-    #         if old_name.startswith('ic_user_my_lv'):
-    #             src = path + "/" + old_name
-    #             dst = path + "/" + mark + old_name.replace('user_', '')
-    #             os.rename(src, dst)
+    path = "C:/Users/Administrator/Desktop/mipmap-xhdpi"
+    old_names = os.listdir(path)
+    mark = 'ic_actor_level'
+    for old_name in old_names:
+        if old_name != sys.argv[0]:
+            print(type(old_name))
+            src = path + "/" + old_name
+            dst = path + "/" + mark + old_name
+            os.rename(src, dst)
 
     # dl = Downloader()
     # dl.get_download_url()
